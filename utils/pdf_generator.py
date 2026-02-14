@@ -8,6 +8,7 @@ from PyPDF2.generic import NameObject
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
@@ -139,6 +140,24 @@ def _extract_rect_map(page):
 
 
 def _find_template_path(template_kind):
+    preferred_files = {
+        "phone": [
+            ROOT_PATH / "휴대전화_허가서양식.pdf",
+            ROOT_PATH / "assets" / "forms" / "phone_form_template.pdf",
+        ],
+        "tablet": [
+            ROOT_PATH / "수업용 태블릿PC_허가서양식.pdf",
+            ROOT_PATH / "assets" / "forms" / "phone_form_template.pdf",
+        ],
+        "gate": [
+            ROOT_PATH / "정문 출입 허가서.pdf",
+            ROOT_PATH / "assets" / "forms" / "gate_form_template.pdf",
+        ],
+    }
+    for candidate in preferred_files.get(template_kind, []):
+        if candidate.exists():
+            return candidate
+
     templates = []
     for pdf in ROOT_PATH.glob("*.pdf"):
         if pdf.name.startswith("_check_"):
@@ -194,11 +213,26 @@ def _register_korean_font():
     font_name = "KoreanForm"
     if font_name in pdfmetrics.getRegisteredFontNames():
         return font_name
-    font_path = Path("C:/Windows/Fonts/malgun.ttf")
-    if font_path.exists():
-        pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
-        return font_name
-    return "Helvetica"
+    candidate_paths = [
+        Path("C:/Windows/Fonts/malgun.ttf"),
+        Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    ]
+    for path in candidate_paths:
+        try:
+            if path.exists():
+                pdfmetrics.registerFont(TTFont(font_name, str(path)))
+                return font_name
+        except Exception:
+            continue
+    try:
+        cid_name = "HYSMyeongJo-Medium"
+        if cid_name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(UnicodeCIDFont(cid_name))
+        return cid_name
+    except Exception:
+        return "Helvetica"
 
 
 def _draw_text_in_rect(pdf_canvas, rect, text, font_name, font_size, align="center"):
