@@ -67,7 +67,7 @@ if not st.session_state.parent_authenticated:
     with st.form("parent_auth_form"):
         c1, c2 = st.columns(2)
         with c1:
-            student_id = st.text_input("학번", placeholder="예: 20250101")
+            student_id = st.text_input("학번", placeholder="예: 1101")
         with c2:
             name = st.text_input("이름", placeholder="예: 홍길동")
         submitted = st.form_submit_button("인증하기", use_container_width=True, type="primary")
