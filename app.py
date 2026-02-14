@@ -7,7 +7,7 @@ from utils.ui_style import inject_nav_label_override
 
 
 st.set_page_config(
-    page_title="출입 스마트기기 관리시스템",
+    page_title="출입·스마트기기 관리시스템",
     page_icon="🏫",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -25,7 +25,7 @@ inject_nav_label_override()
 
 year = get_academic_year()
 
-st.title(f"🏫 {SCHOOL_NAME} 출입 스마트기기 관리시스템")
+st.title(f"🏫 {SCHOOL_NAME} 출입·스마트기기 관리시스템")
 st.divider()
 
 st.subheader("시스템 소개")
