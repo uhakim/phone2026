@@ -16,6 +16,11 @@ from utils.ui_style import inject_nav_label_override
 GOOGLE_SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxdylk68Qe1G-3_Jo5HBaPBiOIrSuGcT_C3DKkgfXZudQ-8mpCX5bcDPVBNW-OsnTcI/exec"
 
 
+def _student_csv_template_bytes() -> bytes:
+    template = "학번,이름,학년,반\n20250101,홍길동,1,1\n20250102,김영희,1,1\n"
+    return template.encode("utf-8-sig")
+
+
 def _get_setting(key: str, default: str) -> str:
     query = "SELECT value FROM settings WHERE key = ?"
     result = execute_query(query, (key,))
@@ -191,6 +196,13 @@ else:
                 20250102,김영희,1,1
                 ```
                 """
+            )
+            st.download_button(
+                label="서식파일 다운로드",
+                data=_student_csv_template_bytes(),
+                file_name="학생명단_업로드_서식.csv",
+                mime="text/csv",
+                use_container_width=True,
             )
             uploaded_file = st.file_uploader("CSV 파일 선택", type=["csv"], label_visibility="collapsed")
             if uploaded_file is not None:
