@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from pathlib import Path
+from config.settings import SCHOOL_YEAR
 
 DB_PATH = Path(__file__).parent.parent / "data" / "database.db"
 
@@ -39,11 +40,23 @@ def init_database():
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
             ("gate_approval_mode", "manual")
         )
+        cursor.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("principal_stamp_path", "")
+        )
+        cursor.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("academic_year", str(SCHOOL_YEAR))
+        )
+        cursor.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            ("academic_year_start", f"{SCHOOL_YEAR}-03-01")
+        )
 
         conn.commit()
-        print(f"✅ Database initialized successfully at {DB_PATH}")
+        print(f"[OK] Database initialized successfully at {DB_PATH}")
     except Exception as e:
-        print(f"❌ Database initialization error: {e}")
+        print(f"[ERROR] Database initialization error: {e}")
         conn.rollback()
     finally:
         conn.close()

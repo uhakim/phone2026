@@ -1,11 +1,15 @@
 # Database
 data/database.db
+data/database.db-*
 data/uploads/*
 data/temp/*
+*.sqlite3
+*.sqlite3-*
 
 # Streamlit
 .streamlit/secrets.toml
 .streamlit/cached*
+.streamlit/certs/
 
 # Python
 __pycache__/
@@ -44,6 +48,18 @@ wheels/
 Thumbs.db
 
 # Project specific
-*.pdf
-*.hwp
+# Generated exports
+exports/
+generated/
+*.tmp
+
+# Archive bucket for old source files
+archive/
+
+# Local form/template source files
+휴대전화_허가서양식.pdf
+수업용 태블릿PC_허가서양식.pdf
+정문 출입 허가서.pdf
+assets/forms/*.pdf
+
 .env

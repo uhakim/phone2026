@@ -6,7 +6,16 @@
       "Bash(python:*)",
       "Bash(timeout 10 streamlit run:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git config:*)",
+      "Bash(git commit:*)",
+      "Bash(timeout 5 streamlit run:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(lsof:*)",
+      "Bash(ls -lh \"C:\\\\Users\\\\win\\\\Desktop\\\\gate_phone\\\\2025 휴대전화 승낙서\"\" && echo \"---\" && ls -lh \"C:UserswinDesktopgate_phone제9호 학교 정문 출입 신청 안내 가정통신문 2025 정문출입 허가서\"\")"
     ]
   }
 }
