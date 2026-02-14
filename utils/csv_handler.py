@@ -2,6 +2,29 @@ import csv
 import io
 from typing import List, Dict, Tuple
 
+HEADER_ALIASES = {
+    "학번": "student_id",
+    "student_id": "student_id",
+    "이름": "name",
+    "name": "name",
+    "학년": "grade",
+    "grade": "grade",
+    "반": "class_num",
+    "class": "class_num",
+    "class_num": "class_num",
+}
+
+
+def _normalize_header(value: str) -> str:
+    return (value or "").strip().lower().replace(" ", "").replace("\ufeff", "")
+
+
+def _is_header_row(row_values: List[str]) -> bool:
+    normalized = [_normalize_header(v) for v in row_values[:4]]
+    mapped = [HEADER_ALIASES.get(v) for v in normalized]
+    return mapped == ["student_id", "name", "grade", "class_num"]
+
+
 def parse_student_csv(file_content: bytes) -> Tuple[List[Dict], List[str]]:
     """
     CSV 파일 파싱
@@ -22,19 +45,34 @@ def parse_student_csv(file_content: bytes) -> Tuple[List[Dict], List[str]]:
         except UnicodeDecodeError:
             text = file_content.decode('euc-kr')
 
-    reader = csv.DictReader(
-        io.StringIO(text),
-        fieldnames=['student_id', 'name', 'grade', 'class_num']
-    )
+    rows = list(csv.reader(io.StringIO(text)))
+    if not rows:
+        return [], []
+
+    start_idx = 0
+    if _is_header_row(rows[0]):
+        start_idx = 1
 
     seen_ids = set()
 
-    for row_num, row in enumerate(reader, start=2):
+    for idx, row in enumerate(rows[start_idx:], start=start_idx):
+        row_num = idx + 1
         try:
-            student_id = row['student_id'].strip()
-            name = row['name'].strip()
-            grade = int(row['grade'].strip())
-            class_num = int(row['class_num'].strip())
+            if not row or all(not str(v).strip() for v in row):
+                continue
+
+            values = [str(v).strip() for v in row]
+            if _is_header_row(values):
+                # 중간에 헤더 행이 섞여 있어도 무시
+                continue
+
+            if len(values) < 4:
+                errors.append(f"행 {row_num}: 열 개수가 부족합니다(최소 4열 필요)")
+                continue
+
+            student_id, name, grade_text, class_text = values[:4]
+            grade = int(grade_text)
+            class_num = int(class_text)
 
             # 검증
             if not student_id or not name:
