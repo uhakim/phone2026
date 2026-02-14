@@ -99,3 +99,10 @@ def clear_all_students() -> int:
     """모든 학생 삭제"""
     query = "DELETE FROM students"
     return execute_delete(query, ())
+
+
+def clear_all_students_and_applications() -> tuple[int, int]:
+    """모든 학생 및 신청서 삭제"""
+    deleted_applications = execute_delete("DELETE FROM applications", ())
+    deleted_students = execute_delete("DELETE FROM students", ())
+    return deleted_students, deleted_applications

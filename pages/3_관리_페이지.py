@@ -8,7 +8,13 @@ import streamlit as st
 from components.auth import authenticate_admin, logout_admin
 from components.statistics import render_statistics_dashboard
 from database.db_manager import execute_query, execute_update
-from services.student_service import add_student, add_students, delete_student, get_all_students
+from services.student_service import (
+    add_student,
+    add_students,
+    delete_student,
+    get_all_students,
+    clear_all_students_and_applications,
+)
 from utils.csv_handler import parse_student_csv, validate_csv_format
 from utils.gate_schedule import WEEKDAYS, gate_schedule_to_grid
 from utils.ui_style import inject_nav_label_override
@@ -234,6 +240,18 @@ else:
                             st.rerun()
                         except Exception as e:
                             st.error(f"오류: {e}")
+
+                st.divider()
+                st.markdown("**전체 삭제**")
+                st.caption("학생 명단과 해당 신청서가 모두 삭제됩니다.")
+                confirm_clear = st.checkbox("전체 삭제를 진행합니다.", key="confirm_clear_all")
+                if st.button("학생 명단 전체 삭제", use_container_width=True, type="secondary"):
+                    if not confirm_clear:
+                        st.warning("체크 후 다시 눌러주세요.")
+                    else:
+                        deleted_students, deleted_apps = clear_all_students_and_applications()
+                        st.success(f"삭제 완료: 학생 {deleted_students}명, 신청서 {deleted_apps}건")
+                        st.rerun()
             with right:
                 st.markdown("**현재 학생 목록**")
                 students = get_all_students()
