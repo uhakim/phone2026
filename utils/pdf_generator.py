@@ -143,14 +143,17 @@ def _find_template_path(template_kind):
     preferred_files = {
         "phone": [
             ROOT_PATH / "휴대전화_허가서양식.pdf",
+            ROOT_PATH / "phone_form_template.pdf",
             ROOT_PATH / "assets" / "forms" / "phone_form_template.pdf",
         ],
         "tablet": [
             ROOT_PATH / "수업용 태블릿PC_허가서양식.pdf",
+            ROOT_PATH / "phone_form_template.pdf",
             ROOT_PATH / "assets" / "forms" / "phone_form_template.pdf",
         ],
         "gate": [
             ROOT_PATH / "정문 출입 허가서.pdf",
+            ROOT_PATH / "gate_form_template.pdf",
             ROOT_PATH / "assets" / "forms" / "gate_form_template.pdf",
         ],
     }

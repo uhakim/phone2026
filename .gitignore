@@ -56,10 +56,4 @@ generated/
 # Archive bucket for old source files
 archive/
 
-# Local form/template source files
-휴대전화_허가서양식.pdf
-수업용 태블릿PC_허가서양식.pdf
-정문 출입 허가서.pdf
-assets/forms/*.pdf
-
 .env
