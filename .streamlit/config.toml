@@ -13,8 +13,4 @@ level = "info"
 
 [server]
 headless = true
-port = 8501
-address = "localhost"
 enableXsrfProtection = true
-sslCertFile = ".streamlit/certs/localhost.pem"
-sslKeyFile = ".streamlit/certs/localhost-key.pem"
