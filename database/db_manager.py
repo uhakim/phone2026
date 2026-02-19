@@ -1,6 +1,7 @@
 import os
 
 import psycopg
+from psycopg import OperationalError
 from psycopg.rows import dict_row
 
 from config.settings import SCHOOL_YEAR
@@ -31,11 +32,15 @@ def _normalize_query(query: str) -> str:
 
 
 def get_db_connection():
-    return psycopg.connect(
-        _get_database_url(),
-        row_factory=dict_row,
-        options="-c search_path=phone2026,public",
-    )
+    try:
+        return psycopg.connect(
+            _get_database_url(),
+            row_factory=dict_row,
+        )
+    except OperationalError as e:
+        raise RuntimeError(
+            "Failed to connect to Postgres. Check SUPABASE_DB_URL (host/port/password/sslmode)."
+        ) from e
 
 
 def init_database():
@@ -105,6 +110,7 @@ def init_database():
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(create_sql)
             cursor.execute(
                 """
@@ -128,6 +134,7 @@ def close_all_connections():
 def execute_query(query, params=None):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params if params is not None else ())
             return cursor.fetchall()
 
@@ -135,6 +142,7 @@ def execute_query(query, params=None):
 def execute_insert(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
 
@@ -142,6 +150,7 @@ def execute_insert(query, params):
 def execute_update(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
 
@@ -149,5 +158,6 @@ def execute_update(query, params):
 def execute_delete(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
