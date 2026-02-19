@@ -1,4 +1,5 @@
 import os
+from urllib.parse import parse_qs, urlparse
 
 import psycopg
 from psycopg import OperationalError
@@ -26,20 +27,52 @@ def _get_database_url() -> str:
     )
 
 
+def _validate_database_url(db_url: str):
+    if "<" in db_url or ">" in db_url:
+        raise RuntimeError("SUPABASE_DB_URL still contains placeholders like <DB_PASSWORD>.")
+
+    parsed = urlparse(db_url)
+    if parsed.scheme not in ("postgresql", "postgres"):
+        raise RuntimeError("SUPABASE_DB_URL must start with postgresql://")
+
+    if not parsed.hostname:
+        raise RuntimeError("SUPABASE_DB_URL is missing host.")
+    if not parsed.username:
+        raise RuntimeError("SUPABASE_DB_URL is missing username.")
+    if not parsed.path or parsed.path == "/":
+        raise RuntimeError("SUPABASE_DB_URL is missing database name (usually /postgres).")
+
+    query = parse_qs(parsed.query)
+    if parsed.hostname.endswith("supabase.co") and query.get("sslmode", [None])[0] != "require":
+        raise RuntimeError("SUPABASE_DB_URL must include sslmode=require for Supabase.")
+
+    # Supabase transaction pooler commonly uses port 6543 and user like postgres.<project_ref>.
+    if parsed.port == 6543 and "." not in parsed.username:
+        raise RuntimeError(
+            "Pooler URL detected (port 6543). Use pooler username format like postgres.<project_ref>."
+        )
+
+
 def _normalize_query(query: str) -> str:
     # Keep existing sqlite-style placeholders working with psycopg.
     return query.replace("?", "%s")
 
 
 def get_db_connection():
+    db_url = _get_database_url()
+    _validate_database_url(db_url)
+
     try:
         return psycopg.connect(
-            _get_database_url(),
+            db_url,
             row_factory=dict_row,
+            connect_timeout=10,
         )
     except OperationalError as e:
+        parsed = urlparse(db_url)
         raise RuntimeError(
-            "Failed to connect to Postgres. Check SUPABASE_DB_URL (host/port/password/sslmode)."
+            f"Failed to connect to Postgres ({parsed.hostname}:{parsed.port or 5432}, user={parsed.username}). "
+            "Check SUPABASE_DB_URL host/port/user/password and sslmode=require."
         ) from e
 
 
