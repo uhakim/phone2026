@@ -4,12 +4,8 @@ from urllib.parse import parse_qs, urlparse
 import psycopg
 from psycopg import OperationalError
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
 
 from config.settings import SCHOOL_YEAR
-
-
-_POOL = None
 
 
 def _get_database_url() -> str:
@@ -62,42 +58,22 @@ def _normalize_query(query: str) -> str:
     return query.replace("?", "%s")
 
 
-def _configure_connection(conn):
-    conn.execute("SET search_path TO phone2026,public")
-
-
-def _get_pool():
-    global _POOL
-
-    if _POOL is not None:
-        return _POOL
-
+def get_db_connection():
     db_url = _get_database_url()
     _validate_database_url(db_url)
 
     try:
-        _POOL = ConnectionPool(
-            conninfo=db_url,
-            min_size=1,
-            max_size=5,
-            timeout=10,
-            kwargs={
-                "row_factory": dict_row,
-                "connect_timeout": 10,
-            },
-            configure=_configure_connection,
+        return psycopg.connect(
+            db_url,
+            row_factory=dict_row,
+            connect_timeout=10,
         )
-        return _POOL
     except OperationalError as e:
         parsed = urlparse(db_url)
         raise RuntimeError(
             f"Failed to connect to Postgres ({parsed.hostname}:{parsed.port or 5432}, user={parsed.username}). "
             "Check SUPABASE_DB_URL host/port/user/password and sslmode=require."
         ) from e
-
-
-def get_db_connection():
-    return _get_pool().connection()
 
 
 def init_database():
@@ -167,6 +143,7 @@ def init_database():
 
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(create_sql)
             cursor.execute(
                 """
@@ -184,15 +161,13 @@ def init_database():
 
 
 def close_all_connections():
-    global _POOL
-    if _POOL is not None:
-        _POOL.close()
-        _POOL = None
+    pass
 
 
 def execute_query(query, params=None):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params if params is not None else ())
             return cursor.fetchall()
 
@@ -200,6 +175,7 @@ def execute_query(query, params=None):
 def execute_insert(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
 
@@ -207,6 +183,7 @@ def execute_insert(query, params):
 def execute_update(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
 
@@ -214,5 +191,6 @@ def execute_update(query, params):
 def execute_delete(query, params):
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
+            cursor.execute("SET search_path TO phone2026,public")
             cursor.execute(_normalize_query(query), params)
             return cursor.rowcount
