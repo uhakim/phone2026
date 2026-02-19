@@ -35,8 +35,11 @@ def _get_setting(key: str, default: str) -> str:
 
 def _update_setting(key: str, value: str):
     query = """
-    INSERT OR REPLACE INTO settings (key, value)
+    INSERT INTO settings (key, value)
     VALUES (?, ?)
+    ON CONFLICT (key) DO UPDATE SET
+      value = EXCLUDED.value,
+      updated_at = now()
     """
     execute_update(query, (key, value))
 

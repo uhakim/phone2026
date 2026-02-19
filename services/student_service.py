@@ -13,8 +13,13 @@ def add_students(students: List[Dict]) -> int:
     for student in students:
         try:
             query = """
-            INSERT OR REPLACE INTO students (student_id, name, grade, class_num)
+            INSERT INTO students (student_id, name, grade, class_num)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT (student_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                grade = EXCLUDED.grade,
+                class_num = EXCLUDED.class_num,
+                updated_at = now()
             """
             execute_insert(
                 query,
