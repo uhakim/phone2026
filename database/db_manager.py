@@ -239,6 +239,7 @@ def _execute_with_reconnect(query, params=None, fetch=False):
         conn = get_db_connection()
         with conn.cursor() as cursor:
             try:
+                cursor.execute("SET search_path TO phone2026,public")
                 cursor.execute(normalized_query, effective_params)
                 if fetch:
                     return cursor.fetchall()
