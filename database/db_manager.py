@@ -1,11 +1,28 @@
 import os
+import logging
 from urllib.parse import parse_qs, urlparse
 
 import psycopg
-from psycopg import OperationalError
+from psycopg import InterfaceError, OperationalError
 from psycopg.rows import dict_row
 
 from config.settings import SCHOOL_YEAR
+
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - non-Streamlit runtime fallback
+    st = None
+
+logger = logging.getLogger(__name__)
+_DB_DEBUG = os.getenv("DB_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+_connect_count = 0
+_reconnect_count = 0
+_cached_conn_ref = None
+
+
+def _debug_log(message: str):
+    if _DB_DEBUG:
+        logger.warning("[db-manager] %s", message)
 
 
 def _get_database_url() -> str:
@@ -58,22 +75,69 @@ def _normalize_query(query: str) -> str:
     return query.replace("?", "%s")
 
 
-def get_db_connection():
+def _create_db_connection():
+    global _connect_count
     db_url = _get_database_url()
     _validate_database_url(db_url)
 
     try:
-        return psycopg.connect(
+        conn = psycopg.connect(
             db_url,
             row_factory=dict_row,
             connect_timeout=10,
+            autocommit=True,
+            options="-c search_path=phone2026,public",
         )
+        _connect_count += 1
+        _debug_log(f"created new connection #{_connect_count} (closed={conn.closed})")
+        return conn
     except OperationalError as e:
         parsed = urlparse(db_url)
         raise RuntimeError(
             f"Failed to connect to Postgres ({parsed.hostname}:{parsed.port or 5432}, user={parsed.username}). "
             "Check SUPABASE_DB_URL host/port/user/password and sslmode=require."
         ) from e
+
+
+if st:
+
+    @st.cache_resource(show_spinner=False)
+    def _get_cached_connection():
+        return _create_db_connection()
+
+else:
+    from functools import lru_cache
+
+    @lru_cache(maxsize=1)
+    def _get_cached_connection():
+        return _create_db_connection()
+
+
+def _invalidate_cached_connection():
+    global _cached_conn_ref
+    try:
+        conn = _cached_conn_ref
+        if conn is not None and not conn.closed:
+            _debug_log("closing cached connection")
+            conn.close()
+    except Exception:
+        pass
+    _debug_log("clearing cached connection")
+    _get_cached_connection.clear()
+    _cached_conn_ref = None
+
+
+def get_db_connection():
+    global _cached_conn_ref
+    conn = _get_cached_connection()
+    if conn.closed:
+        _debug_log("cached connection found closed; rebuilding")
+        _invalidate_cached_connection()
+        conn = _get_cached_connection()
+    else:
+        _debug_log("reusing cached connection")
+    _cached_conn_ref = conn
+    return conn
 
 
 def init_database():
@@ -141,59 +205,72 @@ def init_database():
     CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON phone2026.activity_logs(timestamp);
     """
 
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SET search_path TO phone2026,public")
-            cursor.execute(create_sql)
-            cursor.execute(
-                """
-                INSERT INTO phone2026.settings (key, value) VALUES
-                    ('phone_approval_mode', 'manual'),
-                    ('tablet_approval_mode', 'manual'),
-                    ('gate_approval_mode', 'manual'),
-                    ('phone_approval_delay_minutes', '10'),
-                    ('tablet_approval_delay_minutes', '10'),
-                    ('gate_approval_delay_minutes', '10'),
-                    ('principal_stamp_path', ''),
-                    ('academic_year', %s),
-                    ('academic_year_start', %s)
-                ON CONFLICT (key) DO NOTHING
-                """,
-                (str(SCHOOL_YEAR), f"{SCHOOL_YEAR}-03-01"),
-            )
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute(create_sql)
+        cursor.execute(
+            """
+            INSERT INTO phone2026.settings (key, value) VALUES
+                ('phone_approval_mode', 'manual'),
+                ('tablet_approval_mode', 'manual'),
+                ('gate_approval_mode', 'manual'),
+                ('phone_approval_delay_minutes', '10'),
+                ('tablet_approval_delay_minutes', '10'),
+                ('gate_approval_delay_minutes', '10'),
+                ('principal_stamp_path', ''),
+                ('academic_year', %s),
+                ('academic_year_start', %s)
+            ON CONFLICT (key) DO NOTHING
+            """,
+            (str(SCHOOL_YEAR), f"{SCHOOL_YEAR}-03-01"),
+        )
 
 
 def close_all_connections():
-    pass
+    _invalidate_cached_connection()
+
+
+def _execute_with_reconnect(query, params=None, fetch=False):
+    global _reconnect_count
+    normalized_query = _normalize_query(query)
+    effective_params = params if params is not None else ()
+
+    for attempt in range(2):
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            try:
+                cursor.execute(normalized_query, effective_params)
+                if fetch:
+                    return cursor.fetchall()
+                return cursor.rowcount
+            except (OperationalError, InterfaceError):
+                if attempt == 0:
+                    _reconnect_count += 1
+                    _debug_log(f"query failed, reconnect attempt #{_reconnect_count}")
+                    _invalidate_cached_connection()
+                    continue
+                raise
+
+
+def get_db_debug_snapshot():
+    return {
+        "db_debug": _DB_DEBUG,
+        "connect_count": _connect_count,
+        "reconnect_count": _reconnect_count,
+    }
 
 
 def execute_query(query, params=None):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SET search_path TO phone2026,public")
-            cursor.execute(_normalize_query(query), params if params is not None else ())
-            return cursor.fetchall()
+    return _execute_with_reconnect(query, params=params, fetch=True)
 
 
 def execute_insert(query, params):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SET search_path TO phone2026,public")
-            cursor.execute(_normalize_query(query), params)
-            return cursor.rowcount
+    return _execute_with_reconnect(query, params=params, fetch=False)
 
 
 def execute_update(query, params):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SET search_path TO phone2026,public")
-            cursor.execute(_normalize_query(query), params)
-            return cursor.rowcount
+    return _execute_with_reconnect(query, params=params, fetch=False)
 
 
 def execute_delete(query, params):
-    with get_db_connection() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SET search_path TO phone2026,public")
-            cursor.execute(_normalize_query(query), params)
-            return cursor.rowcount
+    return _execute_with_reconnect(query, params=params, fetch=False)
