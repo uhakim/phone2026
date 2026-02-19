@@ -9,10 +9,10 @@ def get_next_sequence(application_type: str) -> int:
     SELECT COUNT(*) as count
     FROM applications
     WHERE application_type = ? AND status IN ('approved', 'auto_approved')
-    AND strftime('%Y', approved_at) = ?
+    AND EXTRACT(YEAR FROM approved_at) = ?
     """
 
-    result = execute_query(query, (application_type, str(year)))
+    result = execute_query(query, (application_type, year))
 
     if result:
         return result[0]['count'] + 1

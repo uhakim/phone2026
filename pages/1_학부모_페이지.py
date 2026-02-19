@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 import streamlit as st
 from utils.ui_style import inject_nav_label_override
 
@@ -44,6 +46,16 @@ def _build_pdf_filename(app, student):
     app_type = app.get("application_type", "permit")
     student_id = student.get("student_id", "student")
     return f"permit_{app_type}_{student_id}.pdf"
+
+
+def _format_short_date(value):
+    if value is None:
+        return "-"
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)[:10]
 
 
 st.set_page_config(
@@ -198,4 +210,4 @@ else:
                         else:
                             st.markdown("처리 완료")
 
-                    st.caption(f"신청일: {app['submitted_at'][:10]}")
+                    st.caption(f"신청일: {_format_short_date(app.get('submitted_at'))}")
