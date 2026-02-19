@@ -20,6 +20,7 @@ from utils.gate_schedule import WEEKDAYS, gate_schedule_to_grid
 from utils.ui_style import inject_nav_label_override
 
 GOOGLE_SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxdylk68Qe1G-3_Jo5HBaPBiOIrSuGcT_C3DKkgfXZudQ-8mpCX5bcDPVBNW-OsnTcI/exec"
+GATE_SHEET_URL = "https://docs.google.com/spreadsheets/d/16QWXBF_HSl0T55JmEJLp46ulJsGuPt7zVp3LAGBZHZM/edit?gid=0#gid=0"
 
 
 def _student_csv_template_bytes() -> bytes:
@@ -347,7 +348,11 @@ else:
                 st.rerun()
 
     with tab5:
-        st.subheader("🚪 정문 출입 명단")
+        h1, h2 = st.columns([10, 1])
+        with h1:
+            st.subheader("🚪 정문 출입 명단")
+        with h2:
+            st.link_button("🔗", GATE_SHEET_URL, help="구글시트 바로가기", use_container_width=True)
         st.caption("승인 완료된 정문 출입 신청만 표시합니다.")
         roster_rows = _get_gate_roster_rows()
         if not roster_rows:
