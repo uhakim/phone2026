@@ -148,9 +148,12 @@ def init_database():
             cursor.execute(
                 """
                 INSERT INTO phone2026.settings (key, value) VALUES
-                    ('phone_approval_mode', 'manual'),
-                    ('tablet_approval_mode', 'manual'),
-                    ('gate_approval_mode', 'manual'),
+                    ('phone_approval_mode', 'instant_approve'),
+                    ('tablet_approval_mode', 'instant_approve'),
+                    ('gate_approval_mode', 'instant_approve'),
+                    ('phone_approval_delay_minutes', '10'),
+                    ('tablet_approval_delay_minutes', '10'),
+                    ('gate_approval_delay_minutes', '10'),
                     ('principal_stamp_path', ''),
                     ('academic_year', %s),
                     ('academic_year_start', %s)

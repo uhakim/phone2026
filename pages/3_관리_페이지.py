@@ -275,8 +275,12 @@ else:
     with tab2:
         st.subheader("⚙️ 승인 모드 설정")
         st.info("- 자동 발급: 신청 즉시 발급\n- 승인 필요: 관리자 승인 후 발급")
-        modes = ["auto", "manual"]
-        mode_names = {"auto": "자동 발급", "manual": "승인 필요"}
+        modes = ["auto_issue", "instant_approve", "delayed_approve"]
+        mode_names = {
+            "auto_issue": "자동발급",
+            "instant_approve": "즉시승인",
+            "delayed_approve": "N분 후 승인",
+        }
         cols = st.columns(3)
         items = [
             ("phone_approval_mode", "📱 휴대전화"),
@@ -286,7 +290,16 @@ else:
         for col, (key, title) in zip(cols, items):
             with col:
                 st.markdown(f"**{title}**")
-                current = _get_setting(key, "manual")
+                current = _get_setting(key, "instant_approve")
+                if current == "auto":
+                    current = "auto_issue"
+                elif current == "manual":
+                    current = "instant_approve"
+                if current not in modes:
+                    current = "instant_approve"
+
+                delay_key = key.replace("_approval_mode", "_approval_delay_minutes")
+                current_delay = int(_get_setting(delay_key, "10"))
                 selected = st.selectbox(
                     "모드",
                     options=modes,
@@ -295,8 +308,19 @@ else:
                     key=f"mode_{key}",
                     label_visibility="collapsed",
                 )
-                if selected != current and st.button("저장", key=f"save_{key}"):
+                delay_minutes = int(
+                    st.number_input(
+                        "N(분)",
+                        min_value=1,
+                        max_value=1440,
+                        value=current_delay,
+                        step=1,
+                        key=f"delay_{key}",
+                    )
+                )
+                if (selected != current or delay_minutes != current_delay) and st.button("저장", key=f"save_{key}"):
                     _update_setting(key, selected)
+                    _update_setting(delay_key, str(delay_minutes))
                     st.success("설정이 저장되었습니다.")
                     st.rerun()
 

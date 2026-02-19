@@ -1,7 +1,6 @@
-from datetime import datetime
 from typing import Dict, List, Optional
 
-from database.db_manager import execute_delete, execute_insert, execute_query
+from database.db_manager import execute_delete, execute_insert, execute_query, execute_update
 from utils.approval_number import generate_approval_number
 from utils.google_sync import sync_gate_roster_to_google_sheet
 
@@ -10,22 +9,27 @@ def submit_application(
     student_id: str, application_type: str, reason: str, extra_info: str = None
 ) -> tuple[bool, str]:
     try:
-        approval_mode = _get_approval_mode(application_type)
+        _apply_delayed_approvals()
+        approval_mode = _normalize_approval_mode(_get_approval_mode(application_type))
 
-        if approval_mode == "auto":
+        if approval_mode == "auto_issue":
             status = "auto_approved"
-            approved_at = datetime.now().isoformat()
             approval_number = generate_approval_number(application_type) if application_type == "gate" else None
+            approved_by = "system_auto"
+        elif approval_mode == "instant_approve":
+            status = "approved"
+            approval_number = generate_approval_number(application_type) if application_type == "gate" else None
+            approved_by = "system_instant"
         else:
             status = "pending"
-            approved_at = None
             approval_number = None
+            approved_by = None
 
         query = """
         INSERT INTO applications (
             student_id, application_type, reason, extra_info, status,
-            approved_at, approval_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            approved_at, approved_by, approval_number
+        ) VALUES (?, ?, ?, ?, ?, CASE WHEN ? IN ('approved', 'auto_approved') THEN now() ELSE NULL END, ?, ?)
         """
         execute_insert(
             query,
@@ -35,27 +39,31 @@ def submit_application(
                 reason,
                 extra_info,
                 status,
-                approved_at,
+                status,
+                approved_by,
                 approval_number,
             ),
         )
 
-        if status == "auto_approved":
+        if status in ("approved", "auto_approved"):
             if application_type == "gate":
                 ok, sync_msg = sync_gate_roster_to_google_sheet()
                 if ok:
-                    return True, f"신청이 완료되어 즉시 발급되었습니다. {sync_msg}"
-                return True, f"신청이 완료되어 즉시 발급되었습니다. ({sync_msg})"
-            return True, "신청이 완료되어 즉시 발급되었습니다."
-        return True, "신청이 완료되었습니다. (승인 대기 중)"
+                    return True, f"신청이 완료되었습니다. {sync_msg}"
+                return True, f"신청이 완료되었습니다. ({sync_msg})"
+            return True, "신청이 완료되었습니다."
+
+        delay_minutes = _get_delay_minutes(application_type)
+        return True, f"신청이 완료되었습니다. ({delay_minutes}분 후 승인)"
 
     except Exception as e:
-        if "UNIQUE constraint failed" in str(e):
+        if "UNIQUE" in str(e).upper():
             return False, "이미 같은 유형의 신청이 있습니다."
         return False, f"오류가 발생했습니다: {e}"
 
 
 def get_student_applications(student_id: str) -> List[Dict]:
+    _apply_delayed_approvals()
     query = """
     SELECT * FROM applications
     WHERE student_id = ?
@@ -67,6 +75,7 @@ def get_student_applications(student_id: str) -> List[Dict]:
 
 def cancel_student_application(app_id: int, student_id: str) -> tuple[bool, str]:
     try:
+        _apply_delayed_approvals()
         app = get_application(app_id)
         query = """
         DELETE FROM applications
@@ -76,7 +85,7 @@ def cancel_student_application(app_id: int, student_id: str) -> tuple[bool, str]
         """
         deleted = execute_delete(query, (app_id, student_id))
         if deleted <= 0:
-            return False, "취소 가능한 신청이 없습니다."
+            return False, "취소 가능한 신청서가 없습니다."
 
         if app and app.get("application_type") == "gate":
             ok, sync_msg = sync_gate_roster_to_google_sheet()
@@ -95,6 +104,7 @@ def get_application(app_id: int) -> Optional[Dict]:
 
 
 def get_pending_applications() -> List[Dict]:
+    _apply_delayed_approvals()
     query = """
     SELECT a.*, s.grade, s.class_num, s.name
     FROM applications a
@@ -107,6 +117,7 @@ def get_pending_applications() -> List[Dict]:
 
 
 def get_approved_applications(student_id: str) -> List[Dict]:
+    _apply_delayed_approvals()
     query = """
     SELECT * FROM applications
     WHERE student_id = ? AND status IN ('approved', 'auto_approved')
@@ -117,6 +128,7 @@ def get_approved_applications(student_id: str) -> List[Dict]:
 
 
 def get_statistics() -> Dict:
+    _apply_delayed_approvals()
     total = execute_query("SELECT COUNT(*) as count FROM applications")[0]["count"]
     pending = execute_query("SELECT COUNT(*) as count FROM applications WHERE status = 'pending'")[0]["count"]
     approved = execute_query(
@@ -127,6 +139,7 @@ def get_statistics() -> Dict:
 
 
 def get_statistics_by_type() -> List[Dict]:
+    _apply_delayed_approvals()
     query = """
     SELECT application_type, status, COUNT(*) as count
     FROM applications
@@ -138,6 +151,7 @@ def get_statistics_by_type() -> List[Dict]:
 
 
 def get_statistics_by_grade() -> List[Dict]:
+    _apply_delayed_approvals()
     query = """
     SELECT s.grade, COUNT(*) as count
     FROM applications a
@@ -169,4 +183,74 @@ def _get_approval_mode(application_type: str) -> str:
     result = execute_query("SELECT value FROM settings WHERE key = ?", (type_key,))
     if result:
         return result[0]["value"]
-    return "manual"
+    return "instant_approve"
+
+
+def _normalize_approval_mode(mode: str) -> str:
+    # Backward compatibility with old values.
+    if mode == "auto":
+        return "auto_issue"
+    if mode == "manual":
+        return "instant_approve"
+    if mode in ("auto_issue", "instant_approve", "delayed_approve"):
+        return mode
+    return "instant_approve"
+
+
+def _get_delay_minutes(application_type: str) -> int:
+    key = f"{application_type}_approval_delay_minutes"
+    result = execute_query("SELECT value FROM settings WHERE key = ?", (key,))
+    if not result:
+        return 10
+
+    try:
+        value = int(result[0]["value"])
+        return max(1, min(1440, value))
+    except Exception:
+        return 10
+
+
+def _apply_delayed_approvals():
+    delayed_types = []
+    for app_type in ("phone", "tablet", "gate"):
+        if _normalize_approval_mode(_get_approval_mode(app_type)) == "delayed_approve":
+            delayed_types.append(app_type)
+
+    if not delayed_types:
+        return
+
+    gate_changed = False
+    for app_type in delayed_types:
+        delay_minutes = _get_delay_minutes(app_type)
+        targets = execute_query(
+            """
+            SELECT id
+            FROM applications
+            WHERE status = 'pending'
+              AND application_type = ?
+              AND submitted_at <= now() - ((? || ' minutes')::interval)
+            ORDER BY submitted_at ASC
+            """,
+            (app_type, str(delay_minutes)),
+        )
+
+        for row in targets:
+            app_id = row["id"]
+            approval_number = generate_approval_number("gate") if app_type == "gate" else None
+            execute_update(
+                """
+                UPDATE applications
+                SET status = 'approved',
+                    approved_at = now(),
+                    approved_by = ?,
+                    approval_number = ?
+                WHERE id = ?
+                  AND status = 'pending'
+                """,
+                ("system_delay", approval_number, app_id),
+            )
+            if app_type == "gate":
+                gate_changed = True
+
+    if gate_changed:
+        sync_gate_roster_to_google_sheet()
