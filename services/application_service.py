@@ -12,14 +12,10 @@ def submit_application(
         _apply_delayed_approvals()
         approval_mode = _normalize_approval_mode(_get_approval_mode(application_type))
 
-        if approval_mode == "auto_issue":
+        if approval_mode == "instant_auto":
             status = "auto_approved"
             approval_number = generate_approval_number(application_type) if application_type == "gate" else None
             approved_by = "system_auto"
-        elif approval_mode == "instant_approve":
-            status = "approved"
-            approval_number = generate_approval_number(application_type) if application_type == "gate" else None
-            approved_by = "system_instant"
         else:
             status = "pending"
             approval_number = None
@@ -29,7 +25,7 @@ def submit_application(
         INSERT INTO applications (
             student_id, application_type, reason, extra_info, status,
             approved_at, approved_by, approval_number
-        ) VALUES (?, ?, ?, ?, ?, CASE WHEN ? IN ('approved', 'auto_approved') THEN now() ELSE NULL END, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 'auto_approved' THEN now() ELSE NULL END, ?, ?)
         """
         execute_insert(
             query,
@@ -45,20 +41,23 @@ def submit_application(
             ),
         )
 
-        if status in ("approved", "auto_approved"):
+        if status == "auto_approved":
             if application_type == "gate":
                 ok, sync_msg = sync_gate_roster_to_google_sheet()
                 if ok:
                     return True, f"신청이 완료되었습니다. {sync_msg}"
                 return True, f"신청이 완료되었습니다. ({sync_msg})"
-            return True, "신청이 완료되었습니다."
+            return True, "신청이 완료되었습니다. (즉시 자동승인)"
 
-        delay_minutes = _get_delay_minutes(application_type)
-        return True, f"신청이 완료되었습니다. ({delay_minutes}분 후 승인)"
+        if approval_mode == "delayed_auto":
+            delay_minutes = _get_delay_minutes(application_type)
+            return True, f"신청이 완료되었습니다. ({delay_minutes}분 후 자동승인)"
+
+        return True, "신청이 완료되었습니다. (수동 승인 대기)"
 
     except Exception as e:
         if "UNIQUE" in str(e).upper():
-            return False, "이미 같은 유형의 신청이 있습니다."
+            return False, "이미 같은 유형의 신청서가 있습니다."
         return False, f"오류가 발생했습니다: {e}"
 
 
@@ -173,7 +172,7 @@ def get_status_name(status: str) -> str:
         "pending": "승인 대기",
         "approved": "승인 완료",
         "rejected": "반려",
-        "auto_approved": "자동 발급",
+        "auto_approved": "자동승인",
     }
     return names.get(status, status)
 
@@ -183,18 +182,22 @@ def _get_approval_mode(application_type: str) -> str:
     result = execute_query("SELECT value FROM settings WHERE key = ?", (type_key,))
     if result:
         return result[0]["value"]
-    return "instant_approve"
+    return "manual"
 
 
 def _normalize_approval_mode(mode: str) -> str:
     # Backward compatibility with old values.
     if mode == "auto":
-        return "auto_issue"
-    if mode == "manual":
-        return "instant_approve"
-    if mode in ("auto_issue", "instant_approve", "delayed_approve"):
+        return "instant_auto"
+    if mode == "auto_issue":
+        return "instant_auto"
+    if mode == "instant_approve":
+        return "instant_auto"
+    if mode == "delayed_approve":
+        return "delayed_auto"
+    if mode in ("instant_auto", "delayed_auto", "manual"):
         return mode
-    return "instant_approve"
+    return "manual"
 
 
 def _get_delay_minutes(application_type: str) -> int:
@@ -213,7 +216,7 @@ def _get_delay_minutes(application_type: str) -> int:
 def _apply_delayed_approvals():
     delayed_types = []
     for app_type in ("phone", "tablet", "gate"):
-        if _normalize_approval_mode(_get_approval_mode(app_type)) == "delayed_approve":
+        if _normalize_approval_mode(_get_approval_mode(app_type)) == "delayed_auto":
             delayed_types.append(app_type)
 
     if not delayed_types:
@@ -240,7 +243,7 @@ def _apply_delayed_approvals():
             execute_update(
                 """
                 UPDATE applications
-                SET status = 'approved',
+                SET status = 'auto_approved',
                     approved_at = now(),
                     approved_by = ?,
                     approval_number = ?

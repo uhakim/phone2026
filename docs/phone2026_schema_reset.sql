@@ -70,9 +70,9 @@ create index idx_phone2026_app_type on phone2026.applications(application_type);
 create index idx_phone2026_activity_ts on phone2026.activity_logs(timestamp);
 
 insert into phone2026.settings (key, value) values
-  ('phone_approval_mode', 'instant_approve'),
-  ('tablet_approval_mode', 'instant_approve'),
-  ('gate_approval_mode', 'instant_approve'),
+  ('phone_approval_mode', 'manual'),
+  ('tablet_approval_mode', 'manual'),
+  ('gate_approval_mode', 'manual'),
   ('phone_approval_delay_minutes', '10'),
   ('tablet_approval_delay_minutes', '10'),
   ('gate_approval_delay_minutes', '10'),

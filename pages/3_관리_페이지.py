@@ -274,12 +274,12 @@ else:
 
     with tab2:
         st.subheader("⚙️ 승인 모드 설정")
-        st.info("- 자동 발급: 신청 즉시 발급\n- 승인 필요: 관리자 승인 후 발급")
-        modes = ["auto_issue", "instant_approve", "delayed_approve"]
+        st.info("- 즉시자동승인: 신청 즉시 자동승인\n- 자동승인(N분 후): 설정한 시간 뒤 자동승인\n- 수동승인: 관리자 승인 후 처리")
+        modes = ["instant_auto", "delayed_auto", "manual"]
         mode_names = {
-            "auto_issue": "자동발급",
-            "instant_approve": "즉시승인",
-            "delayed_approve": "N분 후 승인",
+            "instant_auto": "즉시자동승인",
+            "delayed_auto": "자동승인(N분 후)",
+            "manual": "수동승인",
         }
         cols = st.columns(3)
         items = [
@@ -290,13 +290,17 @@ else:
         for col, (key, title) in zip(cols, items):
             with col:
                 st.markdown(f"**{title}**")
-                current = _get_setting(key, "instant_approve")
+                current = _get_setting(key, "manual")
                 if current == "auto":
-                    current = "auto_issue"
-                elif current == "manual":
-                    current = "instant_approve"
+                    current = "instant_auto"
+                elif current == "auto_issue":
+                    current = "instant_auto"
+                elif current == "instant_approve":
+                    current = "instant_auto"
+                elif current == "delayed_approve":
+                    current = "delayed_auto"
                 if current not in modes:
-                    current = "instant_approve"
+                    current = "manual"
 
                 delay_key = key.replace("_approval_mode", "_approval_delay_minutes")
                 current_delay = int(_get_setting(delay_key, "10"))
