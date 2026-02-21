@@ -100,13 +100,21 @@ async function resolveTemplatePath(type: NormalizedType) {
 }
 
 async function resolveKoreanFontPath() {
+  const cwd = process.cwd();
+  const parentDir = path.resolve(cwd, "..");
+  const rootDir = path.resolve(cwd, "..", "..");
   const candidates = [
-    path.resolve(process.cwd(), "public", "fonts", "NotoSansCJKkr-Regular.otf"),
-    path.resolve(process.cwd(), "..", "web-next", "public", "fonts", "NotoSansCJKkr-Regular.otf"),
-    path.resolve(process.cwd(), "public", "fonts", "NotoSansKR-Variable.ttf"),
-    path.resolve(process.cwd(), "..", "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
-    path.resolve(process.cwd(), "assets", "fonts", "NotoSansKR-Regular.otf"),
-    path.resolve(process.cwd(), "..", "assets", "fonts", "NotoSansKR-Regular.otf"),
+    path.resolve(cwd, "public", "fonts", "NotoSansCJKkr-Regular.otf"),
+    path.resolve(cwd, "web-next", "public", "fonts", "NotoSansCJKkr-Regular.otf"),
+    path.resolve(parentDir, "web-next", "public", "fonts", "NotoSansCJKkr-Regular.otf"),
+    path.resolve(rootDir, "web-next", "public", "fonts", "NotoSansCJKkr-Regular.otf"),
+    path.resolve(cwd, "public", "fonts", "NotoSansKR-Variable.ttf"),
+    path.resolve(cwd, "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
+    path.resolve(parentDir, "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
+    path.resolve(rootDir, "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
+    path.resolve(cwd, "assets", "fonts", "NotoSansKR-Regular.otf"),
+    path.resolve(parentDir, "assets", "fonts", "NotoSansKR-Regular.otf"),
+    path.resolve(rootDir, "assets", "fonts", "NotoSansKR-Regular.otf"),
     "C:/Windows/Fonts/malgun.ttf",
     "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
