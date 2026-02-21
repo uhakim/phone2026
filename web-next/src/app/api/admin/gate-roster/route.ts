@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { data, error } = await auth.serviceClient
     .from("applications")
     .select("student_id, reason, extra_info, students!inner(name, grade, class_num)")
-    .eq("application_type", "gate")
+    .or("application_type.eq.gate,application_type.ilike.%gate%,application_type.ilike.%pass%,application_type.ilike.%정문%,application_type.ilike.%출입%")
     .in("status", ["approved", "auto_approved"])
     .order("student_id", { ascending: true });
 

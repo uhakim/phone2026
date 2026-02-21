@@ -432,6 +432,7 @@ export default function AdminPage() {
         setError(`처리는 완료됐지만 정문 명단 동기화 실패: ${payload.sync_error}`);
       }
       await fetchApplications(accessToken, filter);
+      await fetchGateRoster(accessToken);
     } catch (updateError) {
       const message = updateError instanceof Error ? updateError.message : "상태 변경 중 오류가 발생했습니다.";
       setError(message);
@@ -623,6 +624,7 @@ export default function AdminPage() {
       const payload = (await response.json()) as { error?: string; count?: number };
       if (!response.ok) throw new Error(payload.error ?? "구글시트 동기화에 실패했습니다.");
       setGateMessage(`구글시트 동기화 완료: ${payload.count ?? 0}건`);
+      await fetchGateRoster(accessToken);
     } catch (syncError) {
       const message = syncError instanceof Error ? syncError.message : "구글시트 동기화 중 오류가 발생했습니다.";
       setGateMessage(message);

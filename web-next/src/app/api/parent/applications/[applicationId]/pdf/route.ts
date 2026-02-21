@@ -1,4 +1,4 @@
-import { getSettingsMap } from "@/lib/admin/settings";
+﻿import { getSettingsMap } from "@/lib/admin/settings";
 import { validateStudentRequest } from "@/lib/auth/request-auth";
 import { formatGateSchedule } from "@/lib/gate/schedule";
 import fontkit from "@pdf-lib/fontkit";
@@ -71,6 +71,8 @@ async function resolveTemplatePath(type: NormalizedType) {
 
 async function resolveKoreanFontPath() {
   const candidates = [
+    path.resolve(process.cwd(), "public", "fonts", "NotoSansKR-Variable.ttf"),
+    path.resolve(process.cwd(), "..", "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
     path.resolve(process.cwd(), "assets", "fonts", "NotoSansKR-Regular.otf"),
     path.resolve(process.cwd(), "..", "assets", "fonts", "NotoSansKR-Regular.otf"),
     "C:/Windows/Fonts/malgun.ttf",
@@ -90,7 +92,7 @@ function toSafeWinAnsiText(value: unknown) {
 }
 
 function normalizeStudentName(name: string) {
-  return name.replace(/^[\s\-–—]+/, "").trim();
+  return String(name ?? "").replace(/^[\s-]+/, "").trim();
 }
 
 function parseDate(value?: string | null) {
@@ -125,7 +127,7 @@ function setTextField(
     }
     field.updateAppearances(font);
   } catch {
-    // 템플릿별 필드 차이를 허용한다.
+    // ?쒗뵆由용퀎 ?꾨뱶 李⑥씠瑜??덉슜?쒕떎.
   }
 }
 
@@ -175,7 +177,7 @@ export async function GET(request: Request, { params }: Params) {
 
   const { applicationId } = await params;
   if (!applicationId) {
-    return NextResponse.json({ error: "신청서 ID가 없습니다." }, { status: 400 });
+    return NextResponse.json({ error: "?좎껌??ID媛 ?놁뒿?덈떎." }, { status: 400 });
   }
 
   const { data: app, error: appError } = await auth.serviceClient
@@ -188,13 +190,13 @@ export async function GET(request: Request, { params }: Params) {
     .maybeSingle();
 
   if (appError) {
-    return NextResponse.json({ error: `신청서 조회 실패: ${appError.message}` }, { status: 500 });
+    return NextResponse.json({ error: `?좎껌??議고쉶 ?ㅽ뙣: ${appError.message}` }, { status: 500 });
   }
   if (!app) {
-    return NextResponse.json({ error: "신청서를 찾지 못했습니다." }, { status: 404 });
+    return NextResponse.json({ error: "?좎껌?쒕? 李얠? 紐삵뻽?듬땲??" }, { status: 404 });
   }
   if (app.status !== "approved") {
-    return NextResponse.json({ error: "승인 완료된 신청서만 PDF 출력할 수 있습니다." }, { status: 400 });
+    return NextResponse.json({ error: "?뱀씤 ?꾨즺???좎껌?쒕쭔 PDF 異쒕젰?????덉뒿?덈떎." }, { status: 400 });
   }
 
   const { data: student, error: studentError } = await auth.serviceClient
@@ -204,7 +206,7 @@ export async function GET(request: Request, { params }: Params) {
     .maybeSingle();
 
   if (studentError) {
-    return NextResponse.json({ error: `학생 조회 실패: ${studentError.message}` }, { status: 500 });
+    return NextResponse.json({ error: `?숈깮 議고쉶 ?ㅽ뙣: ${studentError.message}` }, { status: 500 });
   }
 
   const settings = await getSettingsMap(auth.serviceClient).catch(() => ({
@@ -218,7 +220,7 @@ export async function GET(request: Request, { params }: Params) {
   const normalizedType = normalizeApplicationType(app.application_type);
   const templatePath = await resolveTemplatePath(normalizedType);
   if (!templatePath) {
-    return NextResponse.json({ error: "PDF 양식 파일을 찾지 못했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "PDF ?묒떇 ?뚯씪??李얠? 紐삵뻽?듬땲??" }, { status: 500 });
   }
 
   const templateBytes = await readFile(templatePath);
@@ -283,3 +285,4 @@ export async function GET(request: Request, { params }: Params) {
     },
   });
 }
+
