@@ -39,7 +39,6 @@ async function ensureStudentAuthUser(serviceClient: any, studentId: string) {
     message.includes("already registered") ||
     message.includes("already exists") ||
     message.includes("duplicate key value");
-
   if (!isAlreadyExists) {
     throw new Error(`${studentId} 계정 생성 실패: ${error.message}`);
   }
@@ -68,6 +67,25 @@ async function ensureStudentAuthUser(serviceClient: any, studentId: string) {
   });
   if (updateError) {
     throw new Error(`${studentId} 비밀번호 초기화 실패: ${updateError.message}`);
+  }
+}
+
+async function deleteStudentAuthUser(serviceClient: any, studentId: string) {
+  const email = mapLoginIdToEmail(studentId);
+  const { data: usersData, error: listError } = await serviceClient.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (listError) {
+    throw new Error(`${studentId} 기존 계정 조회 실패: ${listError.message}`);
+  }
+
+  const targetUser = (usersData?.users ?? []).find((user: any) => (user.email || "").toLowerCase() === email.toLowerCase());
+  if (!targetUser?.id) return;
+
+  const { error: deleteError } = await serviceClient.auth.admin.deleteUser(targetUser.id);
+  if (deleteError) {
+    throw new Error(`${studentId} Auth 계정 삭제 실패: ${deleteError.message}`);
   }
 }
 
@@ -174,13 +192,38 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "all=true 쿼리가 필요합니다." }, { status: 400 });
   }
 
+  const { data: studentsData, error: studentsReadError } = await auth.serviceClient
+    .from("students")
+    .select("student_id");
+  if (studentsReadError) {
+    return NextResponse.json({ error: `학생 목록 조회 실패: ${studentsReadError.message}` }, { status: 500 });
+  }
+  const studentIds = (studentsData ?? []).map((row: { student_id: string }) => row.student_id).filter(Boolean);
+
   const { error: appError } = await auth.serviceClient.from("applications").delete().neq("id", 0);
   if (appError) {
     return NextResponse.json({ error: `신청서 전체 삭제 실패: ${appError.message}` }, { status: 500 });
   }
+
+  if (studentIds.length > 0) {
+    const { error: consentError } = await auth.serviceClient.from("user_consents").delete().in("user_id", studentIds);
+    if (consentError) {
+      return NextResponse.json({ error: `동의 이력 전체 삭제 실패: ${consentError.message}` }, { status: 500 });
+    }
+  }
+
   const { error: studentError } = await auth.serviceClient.from("students").delete().neq("id", 0);
   if (studentError) {
     return NextResponse.json({ error: `학생 전체 삭제 실패: ${studentError.message}` }, { status: 500 });
+  }
+
+  try {
+    for (const studentId of studentIds) {
+      await deleteStudentAuthUser(auth.serviceClient, studentId);
+    }
+  } catch (authError) {
+    const message = authError instanceof Error ? authError.message : "학생 Auth 계정 전체 삭제 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
