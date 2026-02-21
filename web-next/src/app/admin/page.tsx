@@ -1090,7 +1090,7 @@ export default function AdminPage() {
               <table className="min-w-[1300px] w-full text-left text-sm">
                 <thead className="bg-bg-soft text-text-strong">
                   <tr>
-                    <th className="px-4 py-3">학생 아이디</th>
+                    <th className="px-4 py-3">학번</th>
                     <th className="px-4 py-3">이름</th>
                     <th className="px-4 py-3">학년</th>
                     <th className="px-4 py-3">반</th>

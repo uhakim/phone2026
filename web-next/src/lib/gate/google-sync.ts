@@ -3,12 +3,24 @@ import { WEEKDAYS, gateScheduleToGrid, toGoogleDismissal } from "@/lib/gate/sche
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function toGoogleCheck(value: string) {
-  return value === "등교" ? true : "";
+  return String(value ?? "").trim() ? true : "";
+}
+
+function toStudentNumber(studentId: string) {
+  const localPart = String(studentId ?? "").split("@")[0] ?? "";
+  const digitsOnly = localPart.replace(/\D/g, "");
+  return digitsOnly || localPart;
 }
 
 export function isGateApplicationType(applicationType: string) {
   const normalized = (applicationType ?? "").toLowerCase();
-  return normalized === "gate" || normalized.includes("pass") || normalized.includes("gate") || applicationType.includes("정문") || applicationType.includes("출입");
+  return (
+    normalized === "gate" ||
+    normalized.includes("pass") ||
+    normalized.includes("gate") ||
+    applicationType.includes("정문") ||
+    applicationType.includes("출입")
+  );
 }
 
 export async function syncGateRosterToGoogleSheet(serviceClient: SupabaseClient) {
@@ -30,7 +42,7 @@ export async function syncGateRosterToGoogleSheet(serviceClient: SupabaseClient)
       webAppUrl = settings.google_sheet_webapp_url;
     }
   } catch {
-    // 설정 접근 실패 시 환경변수 fallback
+    // Fallback to environment variable when settings table read fails.
   }
 
   if (!webAppUrl) {
@@ -42,7 +54,7 @@ export async function syncGateRosterToGoogleSheet(serviceClient: SupabaseClient)
     const { morningMap, dismissalMap } = gateScheduleToGrid(row.extra_info);
 
     return [
-      row.student_id,
+      toStudentNumber(row.student_id),
       student?.name ?? "",
       toGoogleCheck(morningMap[WEEKDAYS[0]] ?? ""),
       toGoogleCheck(morningMap[WEEKDAYS[1]] ?? ""),
@@ -83,7 +95,7 @@ export async function syncGateRosterToGoogleSheet(serviceClient: SupabaseClient)
 
     const result = (await response.json()) as { ok?: boolean; error?: string; count?: number };
     if (!result.ok) {
-      return { ok: false as const, error: result.error ?? "Google 시트 동기화 실패" };
+      return { ok: false as const, error: result.error ?? "Google 시트 쓰기 실패" };
     }
     return { ok: true as const, count: Number(result.count ?? rows.length) };
   } catch (fetchError) {

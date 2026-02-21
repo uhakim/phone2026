@@ -13,6 +13,12 @@ type GateRosterRow = {
   dismissal: Record<string, string>;
 };
 
+function toStudentNumber(studentId: string) {
+  const localPart = String(studentId ?? "").split("@")[0] ?? "";
+  const digitsOnly = localPart.replace(/\D/g, "");
+  return digitsOnly || localPart;
+}
+
 export async function GET(request: Request) {
   const auth = await validateAdminRequest(request);
   if ("error" in auth) return auth.error;
@@ -32,7 +38,7 @@ export async function GET(request: Request) {
     const student = Array.isArray(row.students) ? row.students[0] : row.students;
     const { morningMap, dismissalMap } = gateScheduleToGrid(row.extra_info);
     return {
-      student_id: row.student_id,
+      student_id: toStudentNumber(row.student_id),
       name: student?.name ?? "",
       grade: student?.grade ?? null,
       class_num: student?.class_num ?? null,

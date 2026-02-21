@@ -136,8 +136,12 @@ async function drawPrincipalStamp(pdf: PDFDocument, page: PDFPage, normalizedTyp
   if (!absolutePath) return;
 
   const bytes = await readFile(absolutePath);
-  const lower = absolutePath.toLowerCase();
-  const image = lower.endsWith(".png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+  const isPng = bytes.length > 8
+    && bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4e
+    && bytes[3] === 0x47;
+  const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   const [x1, y1, x2, y2] = STAMP_RECT[normalizedType];
   const width = x2 - x1;
   const height = y2 - y1;
@@ -241,16 +245,16 @@ export async function GET(request: Request, { params }: Params) {
     useSafeAnsi = true;
   }
 
-  const now = new Date();
+  const stampDate = parseDate(app.approved_at) ?? parseDate(app.submitted_at) ?? new Date();
   const normalizedName = normalizeStudentName(String(student?.name ?? ""));
   const nameFontSize = normalizedName.length >= 9 ? 10 : 12;
   const commonFields = {
     grade: String(student?.grade ?? ""),
     classNum: String(student?.class_num ?? ""),
     name: normalizedName,
-    year: String(now.getFullYear()),
-    month: String(now.getMonth() + 1),
-    date: String(now.getDate()),
+    year: String(stampDate.getFullYear()),
+    month: String(stampDate.getMonth() + 1).padStart(2, "0"),
+    date: String(stampDate.getDate()).padStart(2, "0"),
   };
 
   if (normalizedType === "phone" || normalizedType === "tablet") {
