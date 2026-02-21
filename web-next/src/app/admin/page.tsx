@@ -28,7 +28,7 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 type ActionType = "approve" | "reject" | "reset";
 type PolicyMode = "manual" | "immediate" | "delayed";
 type PolicyKey = "phone" | "tablet" | "pass";
-type AdminSection = "applications" | "policies" | "students" | "settings" | "gate_roster" | "stats";
+type AdminSection = "applications" | "policies" | "students" | "settings" | "gate_roster" | "stats" | "password";
 
 type PolicyItem = {
   policy_key: PolicyKey;
@@ -192,6 +192,10 @@ export default function AdminPage() {
   const [stats, setStats] = useState<StatsItem | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [statsMessage, setStatsMessage] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
   const [isCsvDragOver, setIsCsvDragOver] = useState(false);
   const csvFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -625,6 +629,38 @@ export default function AdminPage() {
     }
   }
 
+  async function changePassword() {
+    if (!supabase) return;
+    setError("");
+    setPasswordMessage("");
+
+    const next = newPassword.trim();
+    const confirm = newPasswordConfirm.trim();
+
+    if (next.length < 6) {
+      setError("비밀번호는 6자 이상으로 입력해주세요.");
+      return;
+    }
+    if (next !== confirm) {
+      setError("새 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: next });
+      if (updateError) throw updateError;
+      setPasswordMessage("비밀번호가 변경되었습니다.");
+      setNewPassword("");
+      setNewPasswordConfirm("");
+    } catch (changeError) {
+      const message = changeError instanceof Error ? changeError.message : "비밀번호 변경 중 오류가 발생했습니다.";
+      setError(message);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  }
+
   async function handleLogout() {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -690,6 +726,7 @@ export default function AdminPage() {
             { key: "settings", label: "문서/학년도 설정" },
             { key: "gate_roster", label: "정문 출입 명단" },
             { key: "stats", label: "통계" },
+            { key: "password", label: "비밀번호 변경" },
           ] as const).map((section) => (
             <button
               key={section.key}
@@ -781,6 +818,40 @@ export default function AdminPage() {
                 </div>
               </>
             ) : null}
+          </section>
+        ) : null}
+
+        {activeSection === "password" ? (
+          <section className="mt-6 rounded-xl border border-border-default p-4 sm:p-5">
+            <h2 className="text-lg font-semibold text-text-strong">비밀번호 변경</h2>
+            <p className="mt-2 text-sm text-text-muted">최소 6자 이상 입력해주세요.</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <input
+                type="password"
+                className="school-input h-10 py-1.5 text-sm"
+                placeholder="새 비밀번호"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                autoComplete="new-password"
+              />
+              <input
+                type="password"
+                className="school-input h-10 py-1.5 text-sm"
+                placeholder="새 비밀번호 확인"
+                value={newPasswordConfirm}
+                onChange={(event) => setNewPasswordConfirm(event.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            <button
+              type="button"
+              className="school-button mt-4 px-5 py-3 text-sm font-semibold disabled:opacity-70"
+              onClick={changePassword}
+              disabled={isChangingPassword}
+            >
+              {isChangingPassword ? "변경 중..." : "비밀번호 저장"}
+            </button>
+            {passwordMessage ? <p className="mt-3 text-sm text-status-approved">{passwordMessage}</p> : null}
           </section>
         ) : null}
 

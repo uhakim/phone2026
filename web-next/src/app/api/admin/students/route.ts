@@ -1,4 +1,5 @@
 import { validateAdminRequest } from "@/lib/auth/request-auth";
+import { mapLoginIdToEmail } from "@/lib/auth/student-login";
 import { NextResponse } from "next/server";
 
 type StudentBody = {
@@ -16,6 +17,59 @@ type BulkBody = {
     class_num: number;
   }>;
 };
+
+const STUDENT_INITIAL_PASSWORD = "123456";
+
+async function ensureStudentAuthUser(serviceClient: any, studentId: string) {
+  const email = mapLoginIdToEmail(studentId);
+  const { error } = await serviceClient.auth.admin.createUser({
+    email,
+    password: STUDENT_INITIAL_PASSWORD,
+    email_confirm: true,
+    user_metadata: {
+      role: "student",
+      student_id: studentId,
+    },
+  });
+
+  if (!error) return;
+
+  const message = (error.message || "").toLowerCase();
+  const isAlreadyExists =
+    message.includes("already registered") ||
+    message.includes("already exists") ||
+    message.includes("duplicate key value");
+
+  if (!isAlreadyExists) {
+    throw new Error(`${studentId} 계정 생성 실패: ${error.message}`);
+  }
+
+  const { data: usersData, error: listError } = await serviceClient.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (listError) {
+    throw new Error(`${studentId} 기존 계정 조회 실패: ${listError.message}`);
+  }
+
+  const targetUser = (usersData?.users ?? []).find((user: any) => (user.email || "").toLowerCase() === email.toLowerCase());
+  if (!targetUser?.id) {
+    throw new Error(`${studentId} 기존 계정을 찾을 수 없습니다.`);
+  }
+
+  const { error: updateError } = await serviceClient.auth.admin.updateUserById(targetUser.id, {
+    password: STUDENT_INITIAL_PASSWORD,
+    email_confirm: true,
+    user_metadata: {
+      ...(targetUser.user_metadata ?? {}),
+      role: "student",
+      student_id: studentId,
+    },
+  });
+  if (updateError) {
+    throw new Error(`${studentId} 비밀번호 초기화 실패: ${updateError.message}`);
+  }
+}
 
 export async function GET(request: Request) {
   const auth = await validateAdminRequest(request);
@@ -66,6 +120,16 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: `학생 일괄 저장 실패: ${error.message}` }, { status: 500 });
     }
+
+    try {
+      for (const student of normalized) {
+        await ensureStudentAuthUser(auth.serviceClient, student.student_id);
+      }
+    } catch (authError) {
+      const message = authError instanceof Error ? authError.message : "학생 Auth 계정 생성 중 오류가 발생했습니다.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+
     return NextResponse.json({ count: normalized.length });
   }
 
@@ -88,6 +152,13 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: `학생 저장 실패: ${error.message}` }, { status: 500 });
+  }
+
+  try {
+    await ensureStudentAuthUser(auth.serviceClient, payload.student_id);
+  } catch (authError) {
+    const message = authError instanceof Error ? authError.message : "학생 Auth 계정 생성 중 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   return NextResponse.json({ item: data });
@@ -114,4 +185,3 @@ export async function DELETE(request: Request) {
 
   return NextResponse.json({ ok: true });
 }
-
