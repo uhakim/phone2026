@@ -25,17 +25,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "업로드 파일이 없습니다." }, { status: 400 });
     }
 
+    const bytes = Buffer.from(await file.arrayBuffer());
     const ext = fileExt(file.name);
+    const mime = ext === ".jpg" ? "image/jpeg" : "image/png";
+    const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+
+    // Keep writing local file for local dev preview compatibility.
     const filename = `${BASE_NAME}${ext}`;
     const relativePath = `/uploads/${filename}`;
     const absolutePath = path.join(UPLOAD_DIR, filename);
-
     await mkdir(UPLOAD_DIR, { recursive: true });
-    const bytes = Buffer.from(await file.arrayBuffer());
     await writeFile(absolutePath, bytes);
 
-    await setSettingValue(auth.serviceClient, "principal_stamp_path", relativePath);
-    return NextResponse.json({ path: relativePath });
+    await setSettingValue(auth.serviceClient, "principal_stamp_path", dataUrl);
+    return NextResponse.json({ path: dataUrl, fallback_path: relativePath });
   } catch (error) {
     const message = error instanceof Error ? error.message : "직인 업로드 중 오류가 발생했습니다.";
     return NextResponse.json({ error: message }, { status: 500 });

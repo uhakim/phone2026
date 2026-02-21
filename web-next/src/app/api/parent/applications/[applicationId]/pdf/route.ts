@@ -101,6 +101,8 @@ async function resolveTemplatePath(type: NormalizedType) {
 
 async function resolveKoreanFontPath() {
   const candidates = [
+    path.resolve(process.cwd(), "public", "fonts", "NotoSansCJKkr-Regular.otf"),
+    path.resolve(process.cwd(), "..", "web-next", "public", "fonts", "NotoSansCJKkr-Regular.otf"),
     path.resolve(process.cwd(), "public", "fonts", "NotoSansKR-Variable.ttf"),
     path.resolve(process.cwd(), "..", "web-next", "public", "fonts", "NotoSansKR-Variable.ttf"),
     path.resolve(process.cwd(), "assets", "fonts", "NotoSansKR-Regular.otf"),
@@ -162,15 +164,30 @@ function setTextField(
 }
 
 async function drawPrincipalStamp(pdf: PDFDocument, page: PDFPage, normalizedType: NormalizedType, publicPath: string) {
-  const absolutePath = await resolveStampAbsolutePath(publicPath);
-  if (!absolutePath) return;
+  let bytes: Buffer | null = null;
+  let isPng = false;
 
-  const bytes = await readFile(absolutePath);
-  const isPng = bytes.length > 8
-    && bytes[0] === 0x89
-    && bytes[1] === 0x50
-    && bytes[2] === 0x4e
-    && bytes[3] === 0x47;
+  const normalized = String(publicPath ?? "").trim();
+  if (normalized.startsWith("data:image/")) {
+    const parts = normalized.split(",", 2);
+    if (parts.length === 2) {
+      const header = parts[0].toLowerCase();
+      bytes = Buffer.from(parts[1], "base64");
+      isPng = header.includes("image/png");
+    }
+  } else {
+    const absolutePath = await resolveStampAbsolutePath(publicPath);
+    if (!absolutePath) return;
+    bytes = await readFile(absolutePath);
+    isPng =
+      bytes.length > 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47;
+  }
+
+  if (!bytes) return;
   const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
   const [x1, y1, x2, y2] = STAMP_RECT[normalizedType];
   const width = x2 - x1;
