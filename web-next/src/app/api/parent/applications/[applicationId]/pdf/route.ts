@@ -2,7 +2,7 @@
 import { validateStudentRequest } from "@/lib/auth/request-auth";
 import { formatGateSchedule } from "@/lib/gate/schedule";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, StandardFonts, type PDFFont, type PDFForm, type PDFPage, type PDFTextField } from "pdf-lib";
+import { PDFDocument, StandardFonts, TextAlignment, rgb, type PDFFont, type PDFForm, type PDFPage, type PDFTextField } from "pdf-lib";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -149,13 +149,30 @@ function setTextField(
   value: string,
   font: PDFFont,
   useSafeAnsi: boolean,
-  options?: { fontSize?: number },
+  options?: {
+    fontSize?: number;
+    alignment?: TextAlignment;
+    prependBlankLine?: boolean;
+    verticalOffsetLines?: number;
+    multiline?: boolean;
+  },
 ) {
   try {
     const field: PDFTextField = form.getTextField(name);
-    field.setText(useSafeAnsi ? toSafeWinAnsiText(value) : value);
+    const textValue = useSafeAnsi ? toSafeWinAnsiText(value) : value;
+    if (options?.multiline) {
+      field.enableMultiline();
+    }
+    const verticalOffsetLines = Math.max(
+      0,
+      options?.verticalOffsetLines ?? (options?.prependBlankLine ? 1 : 0),
+    );
+    field.setText(`${"\n".repeat(verticalOffsetLines)}${textValue}`);
     if (typeof options?.fontSize === "number") {
       field.setFontSize(options.fontSize);
+    }
+    if (typeof options?.alignment === "number") {
+      field.setAlignment(options.alignment);
     }
     field.updateAppearances(font);
   } catch {
@@ -192,6 +209,14 @@ async function drawPrincipalStamp(pdf: PDFDocument, page: PDFPage, normalizedTyp
   const [x1, y1, x2, y2] = STAMP_RECT[normalizedType];
   const width = x2 - x1;
   const height = y2 - y1;
+  page.drawRectangle({
+    x: x1,
+    y: y1,
+    width,
+    height,
+    color: rgb(1, 1, 1),
+    borderWidth: 0,
+  });
   page.drawImage(image, { x: x1, y: y1, width, height });
 }
 
@@ -305,18 +330,34 @@ export async function GET(request: Request, { params }: Params) {
   };
 
   if (normalizedType === "phone" || normalizedType === "tablet") {
-    setTextField(form, "grade", commonFields.grade, font, useSafeAnsi);
-    setTextField(form, "class", commonFields.classNum, font, useSafeAnsi);
-    setTextField(form, "name", commonFields.name, font, useSafeAnsi, { fontSize: nameFontSize });
+    setTextField(form, "grade", commonFields.grade, font, useSafeAnsi, { alignment: TextAlignment.Center });
+    setTextField(form, "class", commonFields.classNum, font, useSafeAnsi, { alignment: TextAlignment.Center });
+    setTextField(form, "name", commonFields.name, font, useSafeAnsi, { fontSize: nameFontSize, alignment: TextAlignment.Center });
     setTextField(form, "year", commonFields.year, font, useSafeAnsi);
     setTextField(form, "month", commonFields.month, font, useSafeAnsi);
     setTextField(form, "date", commonFields.date, font, useSafeAnsi);
   } else {
-    setTextField(form, FIELD_GATE_GRADE, commonFields.grade, font, useSafeAnsi);
-    setTextField(form, FIELD_GATE_CLASS, commonFields.classNum, font, useSafeAnsi);
-    setTextField(form, FIELD_GATE_NAME, commonFields.name, font, useSafeAnsi, { fontSize: nameFontSize });
-    setTextField(form, "fill_1", String(app.reason ?? ""), font, useSafeAnsi);
-    setTextField(form, "fill_2", formatGateSchedule(app.extra_info), font, useSafeAnsi);
+    setTextField(form, FIELD_GATE_GRADE, commonFields.grade, font, useSafeAnsi, {
+      alignment: TextAlignment.Center,
+      verticalOffsetLines: 1,
+    });
+    setTextField(form, FIELD_GATE_CLASS, commonFields.classNum, font, useSafeAnsi, {
+      alignment: TextAlignment.Center,
+      verticalOffsetLines: 1,
+    });
+    setTextField(form, FIELD_GATE_NAME, commonFields.name, font, useSafeAnsi, {
+      fontSize: nameFontSize,
+      alignment: TextAlignment.Center,
+      verticalOffsetLines: 1,
+    });
+    setTextField(form, "fill_1", String(app.reason ?? ""), font, useSafeAnsi, {
+      multiline: true,
+      verticalOffsetLines: 1,
+    });
+    setTextField(form, "fill_2", formatGateSchedule(app.extra_info), font, useSafeAnsi, {
+      multiline: true,
+      verticalOffsetLines: 1,
+    });
     setTextField(form, "fill_3", getGatePeriodText(settings), font, useSafeAnsi);
   }
 
