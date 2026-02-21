@@ -29,6 +29,12 @@ const STAMP_RECT: Record<NormalizedType, [number, number, number, number]> = {
   gate: [498.185, 54.2279, 533.97, 94.5085],
 };
 
+const REQUIRED_FIELDS: Record<NormalizedType, string[]> = {
+  phone: ["grade", "class", "name", "year", "month", "date"],
+  tablet: ["grade", "class", "name", "year", "month", "date"],
+  gate: [FIELD_GATE_GRADE, FIELD_GATE_NAME, FIELD_GATE_CLASS, "fill_1", "fill_2", "fill_3"],
+};
+
 function normalizeApplicationType(value: string): NormalizedType {
   const v = (value ?? "").toLowerCase();
   if (v === "phone" || value.includes("\uD734\uB300")) return "phone";
@@ -47,24 +53,48 @@ async function fileExists(filePath: string) {
 }
 
 async function resolveTemplatePath(type: NormalizedType) {
-  const rootDir = path.resolve(process.cwd(), "..");
+  const cwd = process.cwd();
+  const parentDir = path.resolve(cwd, "..");
+  const rootDir = path.resolve(cwd, "..", "..");
   const candidatesByType: Record<NormalizedType, string[]> = {
     phone: [
+      path.join(cwd, KOREAN_FILES.phone),
+      path.join(parentDir, KOREAN_FILES.phone),
       path.join(rootDir, KOREAN_FILES.phone),
+      path.join(cwd, "assets", "forms", "phone_form_template.pdf"),
+      path.join(parentDir, "assets", "forms", "phone_form_template.pdf"),
       path.join(rootDir, "assets", "forms", "phone_form_template.pdf"),
     ],
     tablet: [
+      path.join(cwd, KOREAN_FILES.tablet),
+      path.join(parentDir, KOREAN_FILES.tablet),
       path.join(rootDir, KOREAN_FILES.tablet),
+      path.join(cwd, "assets", "forms", "phone_form_template.pdf"),
+      path.join(parentDir, "assets", "forms", "phone_form_template.pdf"),
       path.join(rootDir, "assets", "forms", "phone_form_template.pdf"),
     ],
     gate: [
+      path.join(cwd, KOREAN_FILES.gate),
+      path.join(parentDir, KOREAN_FILES.gate),
       path.join(rootDir, KOREAN_FILES.gate),
+      path.join(cwd, "assets", "forms", "gate_form_template.pdf"),
+      path.join(parentDir, "assets", "forms", "gate_form_template.pdf"),
       path.join(rootDir, "assets", "forms", "gate_form_template.pdf"),
     ],
   };
 
-  for (const candidate of candidatesByType[type]) {
-    if (await fileExists(candidate)) return candidate;
+  const required = REQUIRED_FIELDS[type];
+  for (const candidate of Array.from(new Set(candidatesByType[type]))) {
+    if (!(await fileExists(candidate))) continue;
+    try {
+      const bytes = await readFile(candidate);
+      const pdf = await PDFDocument.load(bytes);
+      const fieldNames = pdf.getForm().getFields().map((field) => field.getName());
+      const hasAllRequired = required.every((name) => fieldNames.includes(name));
+      if (hasAllRequired) return candidate;
+    } catch {
+      // Ignore invalid candidates and try next.
+    }
   }
   return null;
 }
